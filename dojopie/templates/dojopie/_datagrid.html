@@ -1,0 +1,114 @@
+
+<script type="text/javascript">
+  require(['dojo/ready',
+           'dijit/dijit',
+           'dojox/grid/EnhancedGrid',
+           'dojopie/data/JsonRestStore',
+           'dojo/dom-geometry',
+           'dojo/dom',
+           'dojox/grid/cells/dijit',
+           "dojo/dom-style",
+           "dijit/Dialog",
+           "dojox/grid/enhanced/plugins/Filter",
+           'dojo/domReady!'],
+           function (ready, dijit, DataGrid, JsonRestStore,
+                     domGeom, dom, cells, style, Dialog, Filter) {
+              ready( function () {
+
+                function showErrorDialog(error_message) {
+                  var myDialog = new Dialog({
+                      title: "Kaydetme Hatası",
+                      content: error_message,
+                      style: "width: 300px"
+                  });
+                  myDialog.show();
+                }
+
+                function formatDate(datum){
+                    // Format the value in store, so as to be displayed.
+                    var d = dojo.date.stamp.fromISOString(datum);
+                    return dojo.date.locale.format(d, {
+                                                       formatLength: 'long'});
+                }
+
+                function getDateValue(){
+                  return dojo.date.stamp.toISOString(this.widget.get('value'));
+                }
+
+                dataStore = new dojopie.data.JsonRestStore(
+                                          {target: '{{ target_url}}',
+                                                //syncMode: true,
+                                           idAttribute: 'id'});
+
+                layout = [[
+                    {% for field in fields %}
+                    {
+                      {% if field.type == 'dojox.grid.cells.DateTextBox' %}
+                          type: {{ field.type }},
+                          formatter: formatDate,
+                          getValue: getDateValue,
+                          constraint: {formatLength: 'long'},
+                      {% endif %}
+                      {% if field.editable %}
+                          editable: true,
+                      {% endif %}
+                      name: '{{ field.verbose_name }}',
+                      field: '{{ field.name }}'
+                    }{% if forloop.last %}{% else %},{% endif %}
+                    {% endfor %}
+                ]]
+
+                grid = new DataGrid({id: '{{ grid_id }}',
+                                                store: dataStore,
+                                                structure: layout,
+                                                plugins: {
+                                            filter: {
+                                              closeFilterbarButton: true,
+                                              itemsName: 'kayıtlar'
+                                            }
+
+                                                }
+                                    });
+                grid.setStore(dataStore, null, null);
+                grid.placeAt('{{ place_at_id }}');
+                dojo.connect(grid, 'onApplyCellEdit',
+                    function (value,index,fieldName) {
+                        var actions = dataStore.save();
+                        dojo.forEach(actions, function(action){
+                        var result = action.deferred.then(
+                              function(response){
+                              },
+                              function(err){
+                                try {
+                                  response = JSON.parse(
+                                    action.deferred.ioArgs.xhr.responseText);
+                                  showErrorDialog(response.error_message);
+                                }
+                                catch(err) {
+                                  showErrorDialog("Kayıtta bilinmeyen hata!");
+                                }
+                              })
+                        });
+                });
+                grid.startup();
+
+                var position = domGeom.position(dom.byId("{{ grid_id }}"));
+                var height = position.h+30;
+                function setSize() { 
+                  if (dom.byId("{{ grid_id }}")) {
+                    style.set(dom.byId("{{ grid_id }}"),
+                      {'height': height + "px"}
+                    );
+                    return;
+                  }
+                  else {
+                    setTimeout(setSize, 1000);
+                  }
+                }
+                setTimeout(setSize, 1000);
+                style.set(dom.byId("{{ place_at_id }}"),
+                    {'height': height + 10 + "px"}
+                );
+             });
+           });
+</script>
